@@ -5,10 +5,11 @@ const qs=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 let currentUser=null;
 let authMode='login';
+let editingPet=null;
 
 function code(){const a=new Uint32Array(1);crypto.getRandomValues(a);return 'PET-'+a[0].toString(36).slice(0,6).toUpperCase().padEnd(6,'X')}
 function petIcon(p){return p.species==='Gato'?'🐱':p.species==='Cachorro'?'🐶':'🐾'}
-function hideAll(){['home','auth','register','dashboard','writer','finder','publicProfile'].forEach(id=>qs(id)?.classList.add('hidden'))}
+function hideAll(){['home','auth','resetPassword','register','dashboard','writer','finder','publicProfile'].forEach(id=>qs(id)?.classList.add('hidden'))}
 function goHome(){hideAll();qs('home').classList.remove('hidden');history.replaceState({},'',location.pathname);scrollTo({top:0,behavior:'smooth'})}
 function showSection(id){hideAll();qs(id).classList.remove('hidden');if(id==='dashboard')renderDashboard();scrollTo({top:0,behavior:'smooth'})}
 
@@ -28,8 +29,23 @@ function renderAuthMode(){
 }
 async function startRegisterPet(){
   if(!currentUser){openAuth();qs('authMessage').innerHTML='<div class="notice">Entre ou crie sua conta para cadastrar um pet.</div>';return}
+  editingPet=null; qs('petForm').reset(); qs('petFormTitle').textContent='Novo pet'; qs('petSubmit').textContent='Criar perfil';
   showSection('register');
 }
+
+async function forgotPassword(){
+  const email=qs('authEmail').value.trim();
+  if(!email){qs('authMessage').innerHTML='<div class="notice warning">Digite seu e-mail acima primeiro.</div>';return}
+  const redirectTo=location.origin+location.pathname;
+  const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo});
+  qs('authMessage').innerHTML=error?'<div class="notice warning">'+esc(error.message)+'</div>':'<div class="notice success">✅ Enviamos o link de recuperação para seu e-mail.</div>';
+}
+qs('resetForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const {error}=await sb.auth.updateUser({password:qs('newPassword').value});
+  qs('resetMessage').innerHTML=error?'<div class="notice warning">'+esc(error.message)+'</div>':'<div class="notice success">✅ Senha alterada. Você já pode usar sua conta.</div>';
+  if(!error)setTimeout(()=>showSection('dashboard'),900);
+});
 
 qs('authForm').addEventListener('submit',async e=>{
   e.preventDefault();
@@ -64,7 +80,7 @@ qs('petForm').addEventListener('submit',async e=>{
   if(!currentUser)return openAuth();
   const btn=e.submitter;btn.disabled=true;btn.textContent='Salvando...';
   try{
-    let photo_url=null;
+    let photo_url=editingPet?.photo_url||null;
     const file=qs('photo').files[0];
     if(file){
       const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
@@ -73,12 +89,19 @@ qs('petForm').addEventListener('submit',async e=>{
       if(upErr)throw upErr;
       photo_url=sb.storage.from('pet-photos').getPublicUrl(path).data.publicUrl;
     }
-    const p={owner_user_id:currentUser.id,public_code:code(),name:qs('name').value.trim(),species:qs('species').value,breed:qs('breed').value.trim(),sex:qs('sex').value,color:qs('color').value.trim(),phone:qs('phone').value.trim(),whatsapp:qs('whatsapp').value.trim(),city:qs('city').value.trim(),district:qs('district').value.trim(),address:qs('address').value.trim(),notes:qs('notes').value.trim(),photo_url,lost:false};
-    const {data,error}=await sb.from('pets').insert(p).select().single();
-    if(error)throw error;
-    e.target.reset();await openWriter(data.public_code);
-  }catch(err){alert('Não foi possível cadastrar: '+err.message)}
-  finally{btn.disabled=false;btn.textContent='Criar perfil'}
+    const p={name:qs('name').value.trim(),species:qs('species').value,breed:qs('breed').value.trim(),sex:qs('sex').value,color:qs('color').value.trim(),phone:qs('phone').value.trim(),whatsapp:qs('whatsapp').value.trim(),city:qs('city').value.trim(),district:qs('district').value.trim(),address:qs('address').value.trim(),notes:qs('notes').value.trim(),photo_url};
+    if(editingPet){
+      const {data,error}=await sb.from('pets').update(p).eq('id',editingPet.id).eq('owner_user_id',currentUser.id).select().single();
+      if(error)throw error;
+      editingPet=null;e.target.reset();showSection('dashboard');
+    }else{
+      p.owner_user_id=currentUser.id;p.public_code=code();p.lost=false;
+      const {data,error}=await sb.from('pets').insert(p).select().single();
+      if(error)throw error;
+      e.target.reset();await openWriter(data.public_code);
+    }
+  }catch(err){alert('Não foi possível salvar: '+err.message)}
+  finally{btn.disabled=false;btn.textContent=editingPet?'Salvar alterações':'Criar perfil'}
 });
 
 async function renderDashboard(){
@@ -88,7 +111,20 @@ async function renderDashboard(){
   const {data,error}=await sb.from('pets').select('*').eq('owner_user_id',currentUser.id).order('created_at',{ascending:false});
   if(error){box.innerHTML='<div class="notice warning">'+esc(error.message)+'</div>';return}
   if(!data.length){box.innerHTML='<div class="notice">Você ainda não cadastrou nenhum pet.</div>';return}
-  box.innerHTML=data.map(p=>`<article class="pet-card">${p.photo_url?`<img class="pet-thumb" src="${esc(p.photo_url)}" alt="Foto de ${esc(p.name)}">`:`<div class="pet-icon">${petIcon(p)}</div>`}<h3>${esc(p.name)}</h3><div class="muted">${esc(p.species)}${p.breed?' • '+esc(p.breed):''}</div><div class="code">${esc(p.public_code)}</div><span class="status ${p.lost?'lost':''}">${p.lost?'PET PERDIDO':'ATIVO'}</span><div class="card-actions"><button class="secondary" onclick="openProfile('${p.public_code}')">Ver perfil</button><button class="primary" onclick="openWriter('${p.public_code}')">Gravar NFC</button><button class="ghost" onclick="toggleLost('${p.id}',${!p.lost})">${p.lost?'Marcar encontrado':'Marcar perdido'}</button><button class="ghost" onclick="deletePet('${p.id}')">Excluir</button></div></article>`).join('');
+  box.innerHTML=data.map(p=>`<article class="pet-card">${p.photo_url?`<img class="pet-thumb" src="${esc(p.photo_url)}" alt="Foto de ${esc(p.name)}">`:`<div class="pet-icon">${petIcon(p)}</div>`}<h3>${esc(p.name)}</h3><div class="muted">${esc(p.species)}${p.breed?' • '+esc(p.breed):''}</div><div class="code">${esc(p.public_code)}</div><span class="status ${p.lost?'lost':''}">${p.lost?'PET PERDIDO':'ATIVO'}</span><div class="card-actions"><button class="secondary" onclick="openProfile('${p.public_code}')">Ver perfil</button><button class="secondary" onclick="editPet('${p.id}')">Editar</button><button class="primary" onclick="openWriter('${p.public_code}')">Gravar NFC</button><button class="ghost" onclick="toggleLost('${p.id}',${!p.lost})">${p.lost?'Marcar encontrado':'Marcar perdido'}</button><button class="ghost" onclick="deletePet('${p.id}')">Excluir</button></div></article>`).join('');
+}
+
+async function editPet(id){
+  if(!currentUser)return openAuth();
+  const {data,error}=await sb.from('pets').select('*').eq('id',id).eq('owner_user_id',currentUser.id).single();
+  if(error){alert(error.message);return}
+  editingPet=data;
+  qs('name').value=data.name||''; qs('species').value=data.species||'Cachorro'; qs('breed').value=data.breed||'';
+  qs('sex').value=data.sex||'Não informado'; qs('color').value=data.color||''; qs('phone').value=data.phone||'';
+  qs('whatsapp').value=data.whatsapp||''; qs('city').value=data.city||''; qs('district').value=data.district||'';
+  qs('address').value=data.address||''; qs('notes').value=data.notes||'';
+  qs('petFormTitle').textContent='Editar '+data.name; qs('petSubmit').textContent='Salvar alterações';
+  showSection('register');
 }
 
 async function toggleLost(id,value){
@@ -122,7 +158,7 @@ function profileHtml(p){
   const n=(p.whatsapp||p.phone||'').replace(/\D/g,'');
   const wa='https://wa.me/55'+n+'?text='+encodeURIComponent('Olá! Encontrei o '+p.name+' pela PetTag '+p.public_code+'.');
   const photo=p.photo_url?`<img class="profile-photo" src="${esc(p.photo_url)}" alt="Foto de ${esc(p.name)}">`:`<div class="profile-photo">${petIcon(p)}</div>`;
-  return `${photo}<span class="status ${p.lost?'lost':''}">${p.lost?'🚨 PET PERDIDO':'🐾 PET CADASTRADO'}</span><h1>${esc(p.name)}</h1><p class="muted">${esc(p.species)}${p.breed?' • '+esc(p.breed):''}${p.sex&&p.sex!=='Não informado'?' • '+esc(p.sex):''}</p>${p.color?'<p><b>Características:</b> '+esc(p.color)+'</p>':''}${p.city?'<p><b>Cidade:</b> '+esc(p.city)+(p.district?' • '+esc(p.district):'')+'</p>':''}${p.notes?'<p><b>Observações:</b> '+esc(p.notes)+'</p>':''}<div class="notice">${p.lost?'O tutor informou que este animal está perdido. Entre em contato o quanto antes.':'Este animal possui um tutor cadastrado.'}</div><div class="profile-actions"><a class="call" href="tel:${esc(p.phone)}">📞 Ligar para o tutor</a><a class="wa" href="${wa}" target="_blank" rel="noopener">💬 Chamar no WhatsApp</a></div>`;
+  return `${photo}<span class="status ${p.lost?'lost':''}">${p.lost?'🚨 PET PERDIDO':'🐾 PET CADASTRADO'}</span><h1>${esc(p.name)}</h1><p class="muted">${esc(p.species)}${p.breed?' • '+esc(p.breed):''}${p.sex&&p.sex!=='Não informado'?' • '+esc(p.sex):''}</p>${p.color?'<p><b>Características:</b> '+esc(p.color)+'</p>':''}${p.city?'<p><b>Cidade:</b> '+esc(p.city)+(p.district?' • '+esc(p.district):'')+'</p>':''}${p.notes?'<p><b>Observações:</b> '+esc(p.notes)+'</p>':''}<div class="notice">${p.lost?'O tutor informou que este animal está perdido. Entre em contato o quanto antes.':'Este animal possui um tutor cadastrado.'}</div><div class="privacy-note">Por segurança, o endereço completo do tutor não é exibido publicamente.</div><div class="profile-actions"><a class="call" href="tel:${esc(p.phone)}">📞 Ligar para o tutor</a><a class="wa" href="${wa}" target="_blank" rel="noopener">💬 Chamar no WhatsApp</a></div>`;
 }
 async function openProfile(c){
   hideAll();qs('publicProfile').classList.remove('hidden');qs('publicProfile').innerHTML='<div class="notice">Carregando...</div>';
@@ -138,5 +174,7 @@ async function findPet(){
   currentUser=session?.user||null;refreshAuthButton();
   sb.auth.onAuthStateChange((_event,session)=>{currentUser=session?.user||null;refreshAuthButton()});
   const id=new URLSearchParams(location.search).get('pet');
-  if(id)await openProfile(id);else goHome();
+  const hash=location.hash||'';
+  if(hash.includes('type=recovery')){hideAll();qs('resetPassword').classList.remove('hidden');}
+  else if(id)await openProfile(id);else goHome();
 })();

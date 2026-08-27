@@ -69,15 +69,26 @@
         <input id="authPassword" type="password" required minlength="6" placeholder="Mínimo 6 caracteres">
       </div>
       <div class="form-actions auth-actions">
-        <button type="button" class="ghost" onclick="toggleAuthMode()" id="authToggle">Criar conta</button>
+        <div><button type="button" class="ghost" onclick="toggleAuthMode()" id="authToggle">Criar conta</button><button type="button" class="link-button" onclick="forgotPassword()">Esqueci minha senha</button></div>
         <button type="submit" class="primary" id="authSubmit">Entrar</button>
       </div>
     </form>
   </section>
 
+
+  <section id="resetPassword" class="panel hidden auth-panel">
+    <div class="section-title"><div><span class="eyebrow">Segurança</span><h2>Nova senha</h2></div></div>
+    <div id="resetMessage"></div>
+    <form id="resetForm">
+      <label>Nova senha</label>
+      <input id="newPassword" type="password" minlength="6" required placeholder="Mínimo 6 caracteres">
+      <div class="form-actions"><button type="submit" class="primary">Salvar nova senha</button></div>
+    </form>
+  </section>
+
   <section id="register" class="panel hidden">
     <div class="section-title">
-      <div><span class="eyebrow">Cadastro</span><h2>Novo pet</h2></div>
+      <div><span class="eyebrow">Cadastro</span><h2 id="petFormTitle">Novo pet</h2></div>
       <button class="ghost" onclick="showSection('dashboard')">Voltar</button>
     </div>
 
@@ -102,7 +113,7 @@
       </div>
       <div class="form-actions">
         <button type="button" class="ghost" onclick="showSection('dashboard')">Cancelar</button>
-        <button type="submit" class="primary">Criar perfil</button>
+        <button type="submit" class="primary" id="petSubmit">Criar perfil</button>
       </div>
     </form>
   </section>
