@@ -149,26 +149,42 @@ async function deletePet(id){
 }
 
 
+async function getAdminProfiles(){
+  // Versões antigas da tabela profiles podem não ter a coluna email.
+  // Tentamos com email e, se a coluna ainda não existir, usamos um fallback seguro.
+  let result=await sb.from('profiles').select('user_id,name,email,created_at').order('created_at',{ascending:false});
+  if(result.error && /email.*does not exist|column.*email/i.test(result.error.message||'')){
+    result=await sb.from('profiles').select('user_id,name,created_at').order('created_at',{ascending:false});
+    if(result.data) result.data=result.data.map(p=>({...p,email:null}));
+  }
+  return result;
+}
+
 async function renderAdmin(){
   if(!currentUser){openAuth();return}
   await loadCurrentProfile();
   if(currentProfile?.role!=='admin'){alert('Acesso restrito ao administrador.');showSection('dashboard');return}
   qs('adminStats').innerHTML='<div class="notice">Carregando painel...</div>';
-  const [{data:pets,error:pe},{data:profiles,error:pr}]=await Promise.all([
-    sb.from('pets').select('*').order('created_at',{ascending:false}),
-    sb.from('profiles').select('user_id,name,email,created_at').order('created_at',{ascending:false})
-  ]);
+
+  const petsResult=await sb.from('pets').select('*').order('created_at',{ascending:false});
+  const profilesResult=await getAdminProfiles();
+  const {data:pets,error:pe}=petsResult;
+  const {data:profiles,error:pr}=profilesResult;
+
   if(pe||pr){qs('adminStats').innerHTML='<div class="notice warning">'+esc((pe||pr).message)+'</div>';return}
   adminPetsCache=pets||[];
   const lost=adminPetsCache.filter(p=>p.lost).length;
-  const today=new Date(); const month=adminPetsCache.filter(p=>{const d=new Date(p.created_at);return d.getMonth()===today.getMonth()&&d.getFullYear()===today.getFullYear()}).length;
+  const today=new Date();
+  const month=adminPetsCache.filter(p=>{const d=new Date(p.created_at);return d.getMonth()===today.getMonth()&&d.getFullYear()===today.getFullYear()}).length;
+
   qs('adminStats').innerHTML=`
     <div class="stat-card"><span class="muted">Pets</span><strong>${adminPetsCache.length}</strong></div>
     <div class="stat-card"><span class="muted">Tutores</span><strong>${(profiles||[]).length}</strong></div>
     <div class="stat-card"><span class="muted">Pets perdidos</span><strong>${lost}</strong></div>
     <div class="stat-card"><span class="muted">Novos este mês</span><strong>${month}</strong></div>`;
+
   renderAdminPets(adminPetsCache,profiles||[]);
-  qs('adminUsersBody').innerHTML=(profiles||[]).map(u=>`<tr><td>${esc(u.name||'-')}</td><td>${esc(u.email||'-')}</td><td>${new Date(u.created_at).toLocaleDateString('pt-BR')}</td></tr>`).join('')||'<tr><td colspan="3">Nenhum tutor encontrado.</td></tr>';
+  qs('adminUsersBody').innerHTML=(profiles||[]).map(u=>`<tr><td>${esc(u.name||'-')}</td><td>${esc(u.email||'E-mail não migrado')}</td><td>${new Date(u.created_at).toLocaleDateString('pt-BR')}</td></tr>`).join('')||'<tr><td colspan="3">Nenhum tutor encontrado.</td></tr>';
 }
 function renderAdminPets(pets,profiles=[]){
   const ownerMap=Object.fromEntries(profiles.map(x=>[x.user_id,x]));
@@ -179,7 +195,7 @@ function renderAdminPets(pets,profiles=[]){
 }
 async function filterAdminPets(){
   const q=(qs('adminSearch').value||'').trim().toLowerCase();
-  const {data:profiles}=await sb.from('profiles').select('user_id,name,email');
+  const {data:profiles}=await getAdminProfiles();
   const filtered=!q?adminPetsCache:adminPetsCache.filter(p=>[p.name,p.public_code,p.city,p.district].some(v=>String(v||'').toLowerCase().includes(q)));
   renderAdminPets(filtered,profiles||[]);
 }
