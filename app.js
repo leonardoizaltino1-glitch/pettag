@@ -6,16 +6,27 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&
 let currentUser=null;
 let authMode='login';
 let editingPet=null;
+let currentProfile=null;
+let adminPetsCache=[];
 
 function code(){const a=new Uint32Array(1);crypto.getRandomValues(a);return 'PET-'+a[0].toString(36).slice(0,6).toUpperCase().padEnd(6,'X')}
 function petIcon(p){return p.species==='Gato'?'🐱':p.species==='Cachorro'?'🐶':'🐾'}
-function hideAll(){['home','auth','resetPassword','register','dashboard','writer','finder','publicProfile'].forEach(id=>qs(id)?.classList.add('hidden'))}
+function hideAll(){['home','auth','resetPassword','register','dashboard','writer','admin','finder','privacy','terms','publicProfile'].forEach(id=>qs(id)?.classList.add('hidden'))}
 function goHome(){hideAll();qs('home').classList.remove('hidden');history.replaceState({},'',location.pathname);scrollTo({top:0,behavior:'smooth'})}
-function showSection(id){hideAll();qs(id).classList.remove('hidden');if(id==='dashboard')renderDashboard();scrollTo({top:0,behavior:'smooth'})}
+function showSection(id){hideAll();qs(id).classList.remove('hidden');if(id==='dashboard')renderDashboard();if(id==='admin')renderAdmin();scrollTo({top:0,behavior:'smooth'})}
 
+async function loadCurrentProfile(){
+  currentProfile=null;
+  if(currentUser){
+    const {data}=await sb.from('profiles').select('*').eq('user_id',currentUser.id).maybeSingle();
+    currentProfile=data||null;
+  }
+  qs('adminButton').classList.toggle('hidden',currentProfile?.role!=='admin');
+}
 function refreshAuthButton(){
   qs('authButton').textContent=currentUser?'Minha conta':'Entrar';
   qs('authButton').onclick=currentUser?()=>showSection('dashboard'):openAuth;
+  loadCurrentProfile();
 }
 function openAuth(){authMode='login';renderAuthMode();showSection('auth')}
 function toggleAuthMode(){authMode=authMode==='login'?'signup':'login';renderAuthMode()}
@@ -135,6 +146,42 @@ async function deletePet(id){
   if(!confirm('Excluir este pet?'))return;
   const {error}=await sb.from('pets').delete().eq('id',id);
   if(error)alert(error.message);else renderDashboard();
+}
+
+
+async function renderAdmin(){
+  if(!currentUser){openAuth();return}
+  await loadCurrentProfile();
+  if(currentProfile?.role!=='admin'){alert('Acesso restrito ao administrador.');showSection('dashboard');return}
+  qs('adminStats').innerHTML='<div class="notice">Carregando painel...</div>';
+  const [{data:pets,error:pe},{data:profiles,error:pr}]=await Promise.all([
+    sb.from('pets').select('*').order('created_at',{ascending:false}),
+    sb.from('profiles').select('user_id,name,email,created_at').order('created_at',{ascending:false})
+  ]);
+  if(pe||pr){qs('adminStats').innerHTML='<div class="notice warning">'+esc((pe||pr).message)+'</div>';return}
+  adminPetsCache=pets||[];
+  const lost=adminPetsCache.filter(p=>p.lost).length;
+  const today=new Date(); const month=adminPetsCache.filter(p=>{const d=new Date(p.created_at);return d.getMonth()===today.getMonth()&&d.getFullYear()===today.getFullYear()}).length;
+  qs('adminStats').innerHTML=`
+    <div class="stat-card"><span class="muted">Pets</span><strong>${adminPetsCache.length}</strong></div>
+    <div class="stat-card"><span class="muted">Tutores</span><strong>${(profiles||[]).length}</strong></div>
+    <div class="stat-card"><span class="muted">Pets perdidos</span><strong>${lost}</strong></div>
+    <div class="stat-card"><span class="muted">Novos este mês</span><strong>${month}</strong></div>`;
+  renderAdminPets(adminPetsCache,profiles||[]);
+  qs('adminUsersBody').innerHTML=(profiles||[]).map(u=>`<tr><td>${esc(u.name||'-')}</td><td>${esc(u.email||'-')}</td><td>${new Date(u.created_at).toLocaleDateString('pt-BR')}</td></tr>`).join('')||'<tr><td colspan="3">Nenhum tutor encontrado.</td></tr>';
+}
+function renderAdminPets(pets,profiles=[]){
+  const ownerMap=Object.fromEntries(profiles.map(x=>[x.user_id,x]));
+  qs('adminPetsBody').innerHTML=pets.map(p=>{
+    const owner=ownerMap[p.owner_user_id];
+    return `<tr><td>${esc(p.name)}</td><td>${esc(p.public_code)}</td><td>${p.lost?'PERDIDO':'ATIVO'}</td><td>${esc(p.city||'-')}</td><td>${esc(owner?.email||'Cadastro antigo')}</td><td>${new Date(p.created_at).toLocaleDateString('pt-BR')}</td></tr>`;
+  }).join('')||'<tr><td colspan="6">Nenhum pet encontrado.</td></tr>';
+}
+async function filterAdminPets(){
+  const q=(qs('adminSearch').value||'').trim().toLowerCase();
+  const {data:profiles}=await sb.from('profiles').select('user_id,name,email');
+  const filtered=!q?adminPetsCache:adminPetsCache.filter(p=>[p.name,p.public_code,p.city,p.district].some(v=>String(v||'').toLowerCase().includes(q)));
+  renderAdminPets(filtered,profiles||[]);
 }
 
 async function getPet(c){

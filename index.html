@@ -13,6 +13,7 @@
     <a class="brand" href="#" onclick="goHome()">🐾 PetTag NFC</a>
     <div class="nav-actions">
       <button class="ghost" onclick="showSection('finder')">Encontrei um pet</button>
+      <button id="adminButton" class="ghost hidden" onclick="showSection('admin')">Admin</button>
       <button id="authButton" class="primary" onclick="openAuth()">Entrar</button>
     </div>
   </div>
@@ -141,6 +142,43 @@
     <div id="writerContent"></div>
   </section>
 
+
+  <section id="admin" class="panel hidden">
+    <div class="section-title">
+      <div>
+        <span class="eyebrow">Administração</span>
+        <h2>Painel PetTag</h2>
+        <div class="muted">Visão geral da operação. Acesso exclusivo do administrador.</div>
+      </div>
+      <button class="ghost" onclick="showSection('dashboard')">Voltar</button>
+    </div>
+
+    <div id="adminStats" class="stats-grid"></div>
+
+    <div class="admin-block">
+      <div class="section-title compact">
+        <div><h3>Pets cadastrados</h3></div>
+        <input id="adminSearch" class="admin-search" placeholder="Buscar por pet, código ou cidade" oninput="filterAdminPets()">
+      </div>
+      <div class="table-wrap">
+        <table class="admin-table">
+          <thead><tr><th>Pet</th><th>Código</th><th>Status</th><th>Cidade</th><th>Tutor</th><th>Criado</th></tr></thead>
+          <tbody id="adminPetsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="admin-block">
+      <h3>Tutores cadastrados</h3>
+      <div class="table-wrap">
+        <table class="admin-table">
+          <thead><tr><th>Nome</th><th>E-mail</th><th>Criado</th></tr></thead>
+          <tbody id="adminUsersBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <section id="finder" class="panel hidden">
     <div class="section-title">
       <div><span class="eyebrow">Localização</span><h2>Encontrei um pet</h2></div>
@@ -153,10 +191,51 @@
     <div id="finderResult"></div>
   </section>
 
+
+  <section id="privacy" class="panel hidden legal">
+    <div class="section-title"><div><span class="eyebrow">LGPD</span><h2>Política de Privacidade</h2></div></div>
+    <p>A PetTag utiliza dados fornecidos pelo tutor para permitir a identificação e o contato quando um animal é encontrado.</p>
+    <h3>Dados tratados</h3>
+    <p>Podemos tratar nome do tutor, e-mail, telefone, WhatsApp, cidade, bairro, dados do animal, foto e demais informações inseridas voluntariamente no cadastro.</p>
+    <h3>Finalidade</h3>
+    <p>Os dados são usados para criar e manter a conta do tutor, disponibilizar o perfil do pet, permitir contato em caso de localização do animal e operar o serviço.</p>
+    <h3>Dados públicos</h3>
+    <p>O perfil público do pet pode exibir nome, foto, características, cidade/bairro, observações e botões de contato. O endereço completo do tutor não é exibido publicamente.</p>
+    <h3>Armazenamento e fornecedores</h3>
+    <p>Os dados são armazenados em serviços de infraestrutura utilizados pela PetTag, incluindo autenticação, banco de dados e armazenamento de imagens.</p>
+    <h3>Direitos do titular</h3>
+    <p>O tutor pode solicitar correção, exclusão ou informações sobre seus dados. Também pode editar ou excluir os pets vinculados à sua conta.</p>
+    <h3>Contato</h3>
+    <p>Antes do lançamento comercial, substitua este trecho pelo seu canal oficial de privacidade e suporte.</p>
+    <div class="notice warning"><b>Importante:</b> este texto é um modelo inicial e não substitui revisão jurídica especializada para o seu negócio.</div>
+  </section>
+
+  <section id="terms" class="panel hidden legal">
+    <div class="section-title"><div><span class="eyebrow">Uso do serviço</span><h2>Termos de Uso</h2></div></div>
+    <p>Ao utilizar a PetTag, o tutor declara que as informações cadastradas são verdadeiras e que possui autorização para cadastrar os dados do animal e os meios de contato informados.</p>
+    <h3>Funcionamento da tag</h3>
+    <p>A NTAG213 contém um link para o perfil online do pet. O funcionamento depende de celular compatível, acesso à internet, integridade física da tag e disponibilidade dos serviços de terceiros utilizados pela plataforma.</p>
+    <h3>Responsabilidade do tutor</h3>
+    <p>O tutor é responsável por manter telefone, WhatsApp e demais dados atualizados, testar periodicamente a tag e proteger as credenciais da conta.</p>
+    <h3>Limitações</h3>
+    <p>A PetTag auxilia na identificação e contato, mas não garante a localização ou devolução de animais perdidos.</p>
+    <h3>Uso indevido</h3>
+    <p>É proibido usar a plataforma para cadastrar dados falsos, conteúdo ilegal, ofensivo ou informações de terceiros sem autorização.</p>
+    <h3>Alterações</h3>
+    <p>Os termos podem ser atualizados conforme o serviço evoluir. A versão vigente será publicada nesta página.</p>
+    <div class="notice warning"><b>Importante:</b> este texto é um modelo inicial e deve passar por revisão jurídica antes da comercialização em escala.</div>
+  </section>
+
   <section id="publicProfile" class="public-profile hidden"></section>
 </main>
 
-<footer><div class="wrap">PetTag NFC • identificação inteligente para animais.</div></footer>
+<footer><div class="wrap footer-grid">
+      <div>PetTag NFC • identificação inteligente para animais.</div>
+      <div class="footer-links">
+        <button onclick="showSection('privacy')">Privacidade</button>
+        <button onclick="showSection('terms')">Termos de Uso</button>
+      </div>
+    </div></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script>
